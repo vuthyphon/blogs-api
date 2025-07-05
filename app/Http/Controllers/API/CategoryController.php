@@ -4,6 +4,7 @@ namespace App\Http\Controllers\API;
 
 use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
+use App\Models\Category;
 
 class CategoryController extends Controller
 {
@@ -12,7 +13,8 @@ class CategoryController extends Controller
      */
     public function index()
     {
-        //
+        $categories = Category::all();
+        return response()->json($categories);
     }
 
     /**
@@ -20,7 +22,15 @@ class CategoryController extends Controller
      */
     public function store(Request $request)
     {
-        //
+        $validated = $request->validate([
+            'name' => 'required|string|max:255',
+            'name_kh' => 'nullable|string|max:255',
+            'slug' => 'required|string|unique:categories,slug|max:255',
+        ]);
+
+        $category = Category::create($validated);
+
+        return response()->json($category, 201);
     }
 
     /**
@@ -28,7 +38,8 @@ class CategoryController extends Controller
      */
     public function show(string $id)
     {
-        //
+        $category = Category::findOrFail($id);
+        return response()->json($category);
     }
 
     /**
@@ -36,7 +47,17 @@ class CategoryController extends Controller
      */
     public function update(Request $request, string $id)
     {
-        //
+        $category = Category::findOrFail($id);
+
+        $validated = $request->validate([
+            'name' => 'sometimes|required|string|max:255',
+            'name_kh' => 'nullable|string|max:255',
+            'slug' => 'sometimes|required|string|unique:categories,slug,' . $category->id . '|max:255',
+        ]);
+
+        $category->update($validated);
+
+        return response()->json($category);
     }
 
     /**
@@ -44,6 +65,9 @@ class CategoryController extends Controller
      */
     public function destroy(string $id)
     {
-        //
+        $category = Category::findOrFail($id);
+        $category->delete();
+
+        return response()->json(null, 204);
     }
 }

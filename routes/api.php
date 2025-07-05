@@ -34,4 +34,5 @@ Route::post('/register', [AuthController::class, 'register']);
 Route::post('/logout', [AuthController::class, 'logout'])->middleware('auth:sanctum');
 Route::post('/login', [AuthController::class, 'login']);
 
-
+Route::apiResource('categories', CategoryController::class)->except(['create', 'edit']);
+Route::apiResource('tags', TagController::class)->except(['create', 'edit']);
