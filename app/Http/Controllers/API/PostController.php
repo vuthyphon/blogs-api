@@ -5,6 +5,7 @@ namespace App\Http\Controllers\API;
 use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
 use App\Models\Post;
+use App\Http\Resources\PostResource;
 // use Illuminate\Foundation\Concerns\HasMiddleware;
 
 class PostController extends Controller
@@ -19,8 +20,8 @@ class PostController extends Controller
 
     public function index()
     {
-        $posts = Post::all();
-        return response()->json($posts);
+        $posts = Post::with(['tags','category','user'])->get(); // Eager load relationships
+        return PostResource::collection($posts);
     }
 
     /**
@@ -28,14 +29,41 @@ class PostController extends Controller
      */
     public function store(Request $request)
     {
-        $validated = $request->validate([
+        try {
+            $validated = $request->validate([
             'title' => 'required|string|max:255',
             'body' => 'required|string',
-        ]);
+            'category_id' => 'required|exists:categories,id',
+            // 'image' => 'nullable|image|max:2048', // Optional image field
+            // 'slug' => 'required|string|max:255|unique:posts,slug',
+            ]);
 
-        $post = $request->user()->posts()->create($validated);
+            $post = null;
 
-        return response()->json($post, 201);
+            \DB::transaction(function () use ($request, $validated, &$post) {
+                $post = $request->user()->posts()->create($validated);
+                $post->tags()->sync($request->input('tags', [])); // Sync tags if provided
+            });
+
+            // Handle image upload if provided
+            if ($request->hasFile('images')) {
+                foreach ($request->file('images') as $image) {
+                $path = $image->store('posts', 'public');
+
+                    $post->images()->create([
+                        'image_path' => $path,
+                    ]);
+                }
+            }
+
+        return response()->json('Post created successfully.', 201);
+
+        } catch (\Exception $e) {
+            return response()->json([
+                'message' => 'Failed to create post.',
+                'error' => $e->getMessage()
+            ], 500);
+        }
     }
 
     /**
@@ -45,7 +73,7 @@ class PostController extends Controller
     {
         $post = Post::findOrFail($id);
 
-        return response()->json($post);
+        return new PostResource($post);
     }
 
     /**
