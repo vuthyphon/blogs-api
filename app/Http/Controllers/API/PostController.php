@@ -113,16 +113,38 @@ class PostController extends Controller
      */
     public function update(Request $request, string $id)
     {
-        $post = Post::findOrFail($id);
+        try{
+            $post = Post::findOrFail($id);
 
-        $validated = $request->validate([
-            'title' => 'sometimes|required|string|max:255',
-            'content' => 'sometimes|required|string',
-        ]);
+            $validated = $request->validate([
+                'title' => 'sometimes|required|string|max:255',
+                'body' => 'sometimes|required|string',
+                'category_id' => 'required|exists:categories,id',
+                'thumbnail' => 'nullable|image|max:10000',
+            ]);
 
-        $post->update($validated);
+            $post->update($validated);
+            // Attach tags
+            $tagsInput = $request->input('tags', []);
+            $tags = is_array($tagsInput) ? $tagsInput : explode(',', $tagsInput);
+            $post->tags()->sync(array_map('intval', $tags));
 
-        return response()->json($post);
+            // ✅ Handle thumbnail upload (optional)
+            if ($request->hasFile('thumbnail')) {
+                $thumbnail = $request->file('thumbnail');
+                $validated['image'] = $thumbnail->store('posts', 'public'); // stored as 'image' field
+            }
+
+           return response()->json(['message' => 'Post update successfully'], 201);
+        }
+        catch (\Throwable $e) {
+            Log::error('Post creation failed: ' . $e->getMessage());
+            return response()->json([
+                'message' => 'Failed to update post.',
+                'error' => $e->getMessage(),
+            ], 500);
+        }
+
     }
 
     /**
