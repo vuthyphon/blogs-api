@@ -20,26 +20,13 @@ class TagController extends Controller
      */
     public function store(Request $request)
     {
-         $validated = $request->validate([
-        'title' => 'required',
-        'body' => 'required',
-        'category_id' => 'required',
-        'tags' => 'array',
-        'image' => 'nullable|image'
+        $validated = $request->validate([
+            'name' => 'required|string|max:255|unique:tags,name',
         ]);
 
-        $slug = Str::slug($request->title);
-        $validated['slug'] = $slug;
-        $validated['user_id'] = auth()->id();
+        $tag = auth()->user()->tags()->create($validated);
 
-        if ($request->hasFile('image')) {
-            $validated['image'] = $request->file('image')->store('images', 'public');
-        }
-
-        $post = Post::create($validated);
-        $post->tags()->attach($request->tags);
-
-        return response()->json($post->load('tags', 'category', 'author'));
+        return response()->json(['message' => 'Tag created successfully.', 'tag' => $tag], 201);
     }
 
     /**
@@ -47,7 +34,8 @@ class TagController extends Controller
      */
     public function show(string $id)
     {
-        //
+        $tag = Tag::findOrFail($id);
+        return response()->json($tag);
     }
 
     /**
@@ -55,7 +43,12 @@ class TagController extends Controller
      */
     public function update(Request $request, string $id)
     {
-        //
+        $tag = Tag::findOrFail($id);
+        $validated = $request->validate([
+            'name' => 'required|string|max:255|unique:tags,name,' . $tag->id,
+        ]);
+        $tag->update($validated);
+        return response()->json(['message' => 'Tag updated successfully.', 'tag' => $tag]);
     }
 
     /**
@@ -63,6 +56,8 @@ class TagController extends Controller
      */
     public function destroy(string $id)
     {
-        //
+        $tag = Tag::findOrFail($id);
+        $tag->delete();
+        return response()->json(['message' => 'Tag deleted successfully.']);
     }
 }

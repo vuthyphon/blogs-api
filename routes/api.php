@@ -8,16 +8,23 @@ use App\Http\Controllers\API\PostController;
 use App\Http\Controllers\API\CategoryController;
 use App\Http\Controllers\API\TagController;
 
-Route::post('/login', [AuthController::class, 'login']);
-
 Route::middleware('auth:sanctum')->group(function () {
     Route::apiResource('posts', PostController::class);
+
     Route::apiResource('categories', CategoryController::class);
     Route::apiResource('tags', TagController::class);
 });
 
+// Move meta route outside the auth group for consistency
+Route::get('/articles/meta', [PostController::class, 'meta']);
+
+
 Route::get('/articles', [PostController::class, 'index']);
 Route::get('/articles/{id}', [PostController::class, 'show']);
+Route::post('/posts/upload', [PostController::class, 'upload']);
+Route::post('/posts/test_upload', [PostController::class, 'upload_images']);
+
+
 
 Route::get('/user', function (Request $request) {
     return $request->user();

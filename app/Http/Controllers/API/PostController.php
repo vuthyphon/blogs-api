@@ -5,7 +5,16 @@ namespace App\Http\Controllers\API;
 use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
 use App\Models\Post;
+use App\Models\Category;
+use App\Models\Tag;
+use App\Models\PostTags;
+use App\Models\PostImage;
+
 use App\Http\Resources\PostResource;
+use App\Http\Resources\ArticleResource;
+use App\Http\Resources\MetaResource;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 // use Illuminate\Foundation\Concerns\HasMiddleware;
 
 class PostController extends Controller
@@ -21,7 +30,7 @@ class PostController extends Controller
     public function index()
     {
         $posts = Post::with(['tags','category','user'])->get(); // Eager load relationships
-        return PostResource::collection($posts);
+        return response()->json(PostResource::collection($posts));
     }
 
     /**
@@ -30,41 +39,57 @@ class PostController extends Controller
     public function store(Request $request)
     {
         try {
+            // ✅ Validate input
             $validated = $request->validate([
-            'title' => 'required|string|max:255',
-            'body' => 'required|string',
-            'category_id' => 'required|exists:categories,id',
-            // 'image' => 'nullable|image|max:2048', // Optional image field
-            // 'slug' => 'required|string|max:255|unique:posts,slug',
+                'title' => 'required|string|max:255',
+                'body' => 'required|string',
+                'category_id' => 'required|exists:categories,id',
+                'thumbnail' => 'nullable|image|max:10000',
             ]);
 
-            $post = null;
-
-            \DB::transaction(function () use ($request, $validated, &$post) {
-                $post = $request->user()->posts()->create($validated);
-                $post->tags()->sync($request->input('tags', [])); // Sync tags if provided
-            });
-
-            // Handle image upload if provided
-            if ($request->hasFile('images')) {
-                foreach ($request->file('images') as $image) {
-                $path = $image->store('posts', 'public');
-
-                    $post->images()->create([
-                        'image_path' => $path,
-                    ]);
-                }
+            // ✅ Handle thumbnail upload (optional)
+            if ($request->hasFile('thumbnail')) {
+                $thumbnail = $request->file('thumbnail');
+                $validated['image'] = $thumbnail->store('posts', 'public'); // stored as 'image' field
             }
 
-        return response()->json('Post created successfully.', 201);
+            // ✅ Start DB transaction
+            DB::transaction(function () use ($request, $validated) {
+                // Create post
+                $post = $request->user()->posts()->create($validated);
 
-        } catch (\Exception $e) {
+                // Attach tags
+                $tagsInput = $request->input('tags', []);
+                $tags = is_array($tagsInput) ? $tagsInput : explode(',', $tagsInput);
+                $post->tags()->sync(array_map('intval', $tags));
+
+                // Upload multiple images
+                if ($request->hasFile('images')) {
+                    $images = $request->file('images');
+                    if (!is_array($images)) {
+                        $images = [$images]; // ensure it's an array
+                    }
+
+                    $imageData = [];
+                    foreach ($images as $image) {
+                        $imageData[] = ['image_path' => $image->store('posts', 'public')];
+                    }
+
+                    $post->images()->createMany($imageData);
+                }
+            });
+
+            return response()->json(['message' => 'Post created successfully'], 201);
+
+        } catch (\Throwable $e) {
+            Log::error('Post creation failed: ' . $e->getMessage());
             return response()->json([
                 'message' => 'Failed to create post.',
-                'error' => $e->getMessage()
+                'error' => $e->getMessage(),
             ], 500);
         }
     }
+
 
     /**
      * Display the specified resource.
@@ -72,8 +97,15 @@ class PostController extends Controller
     public function show(string $id)
     {
         $post = Post::findOrFail($id);
+        if($post)
+        {
+             return response()->json(new ArticleResource($post));
+        }
+        else{
+            return response()->json(["message"=>'not found!']);
+        }
 
-        return new PostResource($post);
+
     }
 
     /**
@@ -102,5 +134,69 @@ class PostController extends Controller
         $post->delete();
 
         return response()->json(null, 204);
+    }
+
+    public function upload(Request $request)
+    {
+        $request->validate([
+            'images.*' => 'image|mimes:jpg,jpeg,png,gif|max:2048'
+        ]);
+
+        //return $request->file('images');
+        $paths = [];
+        foreach ($request->file('images') as $file) {
+            $paths[] = $file->store('img', 'public');
+        }
+
+        return response()->json([
+            'message' => 'Images uploaded successfully!',
+            'paths' => $paths
+        ]);
+    }
+
+    // test upload with posts image
+
+    public function upload_images(Request $request)
+    {
+       if ($request->hasFile('images')) {
+
+                $images = $request->file('images');
+
+                if (!is_array($images)) {
+                    $images = [$images];
+                }
+                //return response()->json($request->input('images'));
+                $data = [];
+                foreach ($images as $image) {
+                    $path = $image->store('posts', 'public');
+                    $data[] = [
+                        'image_path' => $path,
+                        'post_id' => 78
+                    ];
+                }
+
+                //return response()->json($data);
+                 PostImage::insert($data);
+
+                   // $imageData=["image_path"=>'test_path','post_id'=>78];
+
+                   // PostImage::insert($imageData);
+
+            }
+
+    }
+
+    public function meta(Request $request)
+    {
+        $cate=Category::select('id', 'name')->get();
+        $tags=Tag::select('id', 'name')->get();
+        $meta=[
+            'categories' =>$cate ,
+            'tags' => $tags,
+        ];
+
+        //return $meta;
+
+        return (new MetaResource($meta))->response()->getData(true);
     }
 }
