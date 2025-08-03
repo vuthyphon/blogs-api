@@ -4,6 +4,10 @@ namespace App\Http\Controllers\API;
 
 use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
+use App\Models\Tag;
+use Illuminate\Support\Str;
+
+
 
 class TagController extends Controller
 {
@@ -12,7 +16,8 @@ class TagController extends Controller
      */
     public function index()
     {
-        //
+        $tag = Tag::get();
+        return response()->json($tag);
     }
 
     /**
@@ -23,8 +28,9 @@ class TagController extends Controller
         $validated = $request->validate([
             'name' => 'required|string|max:255|unique:tags,name',
         ]);
+        $validated['slug'] = Str::slug($validated['name']);
 
-        $tag = auth()->user()->tags()->create($validated);
+       $tag = Tag::create($validated);
 
         return response()->json(['message' => 'Tag created successfully.', 'tag' => $tag], 201);
     }
@@ -47,6 +53,8 @@ class TagController extends Controller
         $validated = $request->validate([
             'name' => 'required|string|max:255|unique:tags,name,' . $tag->id,
         ]);
+        $validated['slug'] = Str::slug($validated['name']);
+
         $tag->update($validated);
         return response()->json(['message' => 'Tag updated successfully.', 'tag' => $tag]);
     }
