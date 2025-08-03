@@ -29,8 +29,15 @@ class PostController extends Controller
 
     public function index()
     {
-        $posts = Post::with(['tags','category','user'])->get(); // Eager load relationships
+        $posts = Post::with(['tags','category','user'])->where(['is_active'=>1])->get(); // Eager load relationships
         return response()->json(PostResource::collection($posts));
+    }
+
+    public function articles(Request $request)
+    {
+        $posts = Post::with(['tags','category','user'])->where(['is_publish'=>1,'is_active'=>1])->limit(6)->get(); // Eager load relationships
+        $newTicker=Post::select(['id','title'])->where(['is_publish'=>1,'is_active'=>1])->limit(15)->get();
+        return response()->json(['posts'=>PostResource::collection($posts),'news_tickers'=>$newTicker]);
     }
 
     /**
@@ -116,6 +123,8 @@ class PostController extends Controller
         try{
             $post = Post::findOrFail($id);
 
+           // return response()->json($request->all());
+
             $validated = $request->validate([
                 'title' => 'sometimes|required|string|max:255',
                 'body' => 'sometimes|required|string',
@@ -123,16 +132,35 @@ class PostController extends Controller
                 'thumbnail' => 'nullable|image|max:10000',
             ]);
 
+            // ✅ Handle thumbnail upload (optional)
+            if ($request->hasFile('thumbnail')) {
+                $thumbnail = $request->file('thumbnail');
+                $validated['image'] = $thumbnail->store('posts', 'public'); // stored as 'image' field
+            }
+
+        //     return $validated;
+        //$validated['category_id']=$request->input('category_id');
+
             $post->update($validated);
             // Attach tags
             $tagsInput = $request->input('tags', []);
             $tags = is_array($tagsInput) ? $tagsInput : explode(',', $tagsInput);
             $post->tags()->sync(array_map('intval', $tags));
 
-            // ✅ Handle thumbnail upload (optional)
-            if ($request->hasFile('thumbnail')) {
-                $thumbnail = $request->file('thumbnail');
-                $validated['image'] = $thumbnail->store('posts', 'public'); // stored as 'image' field
+
+            // Upload multiple images
+            if ($request->hasFile('images')) {
+                $images = $request->file('images');
+                if (!is_array($images)) {
+                    $images = [$images]; // ensure it's an array
+                }
+
+                $imageData = [];
+                foreach ($images as $image) {
+                    $imageData[] = ['image_path' => $image->store('posts', 'public')];
+                }
+
+                $post->images()->createMany($imageData);
             }
 
            return response()->json(['message' => 'Post update successfully'], 201);
@@ -153,10 +181,38 @@ class PostController extends Controller
     public function destroy(string $id)
     {
         $post = Post::findOrFail($id);
-        $post->delete();
+        $post->update(['is_active',0]);
 
-        return response()->json(null, 204);
+        return response('Post deleted')->json(null, 204);
     }
+
+
+    public function togglePublish(Request $request, $id)
+    {
+        $post = Post::findOrFail($id);
+        $post->is_publish = $request->input('is_publish', 0);
+        $post->save();
+
+        return response()->json(['message' => 'Publish status updated']);
+    }
+    public function publish_post(string $id)
+    {
+        $post = Post::findOrFail($id);
+        $post->update(['is_publish',0]);
+
+        return response('Post deleted')->json(null, 204);
+    }
+
+    public function active_post(string $id)
+    {
+        $post = Post::findOrFail($id);
+        $post->update(['is_active',1]);
+
+        return response('Post deleted')->json(null, 204);
+    }
+
+
+
 
     public function upload(Request $request)
     {

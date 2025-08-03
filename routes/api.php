@@ -6,6 +6,7 @@ use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\API\AuthController;
 use App\Http\Controllers\API\PostController;
 use App\Http\Controllers\API\CategoryController;
+use App\Http\Controllers\API\PostImageController;
 use App\Http\Controllers\API\TagController;
 
 Route::middleware('auth:sanctum')->group(function () {
@@ -13,16 +14,25 @@ Route::middleware('auth:sanctum')->group(function () {
 
     Route::apiResource('categories', CategoryController::class);
     Route::apiResource('tags', TagController::class);
+
+    //delete Images
+    Route::delete('/post-images/{id}', [PostImageController::class, 'destroy']);
+    //active and publish post
+    Route::put('/posts/{id}/publish', [PostController::class, 'togglePublish']);
+
+    Route::patch('/posts/active/{id}',[PostController::class, 'active_post']);
+
 });
 
 // Move meta route outside the auth group for consistency
 Route::get('/articles/meta', [PostController::class, 'meta']);
 
 
-Route::get('/articles', [PostController::class, 'index']);
+Route::get('/articles', [PostController::class, 'articles']);
 Route::get('/articles/{id}', [PostController::class, 'show']);
 Route::post('/posts/upload', [PostController::class, 'upload']);
 Route::post('/posts/test_upload', [PostController::class, 'upload_images']);
+
 
 
 
